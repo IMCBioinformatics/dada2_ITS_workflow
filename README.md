@@ -1,4 +1,4 @@
-# Amplicon sequencing DADA2 snakemake workflow 
+# ITS Amplicon sequencing DADA2 snakemake workflow 
 
 [![Conda](https://img.shields.io/badge/conda-v22.11.1-lightgrey)](https://docs.conda.io/en/latest/)
 [![Snakemake](https://img.shields.io/badge/snakemake-7.32.4.1-blue)](https://snakemake.bitbucket.io)
