@@ -281,7 +281,7 @@ python utils/scripts/common/prepare.py <DIR>
 
 <br>
 
-#### 3.5 Download the taxonomy databases from http://www2.decipher.codes/Downloads.html that you plan to use in utils/databases/ and consequently set the path for them in the config file
+#### 3.5 Download the taxonomy databases from http://www2.decipher.codes/Downloads.html or https://unite.ut.ee/repository.php that you plan to use in utils/databases/ and consequently set the path for them in the config file
 
 #### 3.6 Once confident with all the parameters first run the snakemake dry run command to make sure that pipeline is working.
  <br>
