@@ -1,0 +1,163 @@
+# This file should contain everything to configure the workflow on a global scale.
+# In case of sample based data, it should be complemented by a samples.tsv file that contains
+# one row per sample. It can be parsed easily via pandas.
+
+#**************
+#*** inputs ***
+#**************
+
+# List of fastq files
+list_files: "samples/samples.tsv"
+
+#A path to where the raw fastq files are stored
+input_dir: "/bulk/sycuro_bulk/lsycuro_labshare/Sahar/IMC_ITS_pipeline/dada2_ITS_workflow/data/qingshan_data/ITS_reads/all_reads"
+#input_dir: "/bulk/sycuro_bulk/lsycuro_labshare/Sahar/IMC_ITS_pipeline/dada2_ITS_workflow/data/callahan_data/raw"   #With no slash at the end
+
+#The name of the output directory. This is for not overwriting the output folder in case of rerunning the pipeline after changing some parameters.
+output_dir: "output_qingshan"
+#output_dir: "output_callahan"
+
+#path of the main snakemake directory
+path: "/bulk/sycuro_bulk/lsycuro_labshare/Sahar/IMC_ITS_pipeline/dada2_ITS_workflow/"
+
+ 
+# Reads format
+forward_read_suffix: "_R1_001"
+reverse_read_suffix: "_R2_001"
+#forward_read_suffix: "_1"
+#reverse_read_suffix: "_2"
+
+
+# Reads compressed/decompressed
+compression_suffix: ".fastq.gz"     #".fastq.gz" or ".fastq"
+
+
+
+#**************
+#***** QC *****
+#**************
+
+## Cutadapt
+## Removing primers if they were sequenced. 
+##***If primers need to be removed set this to True and add the primer sequences***
+
+primer_removal: True  #True or False
+
+primers:
+
+#Callahan's (BITS fwd and B58S3 rev primers)
+#fwd_primer: "ACCTGCGGARGGATCA"
+#rev_primer: "GAGATCCRTTGYTRAAAGTT"
+#fwd_primer_rc: "TGATCCYTCCGCAGGT"
+#rev_primer_rc: "AACTTTYARCAAYGGATCTC"
+
+
+#Qingshan's (ITS3 fwd and ITS4 rev primers)
+fwd_primer: "GCATCGATGAAGAACGCAG"
+rev_primer: "TCCTCCGCTTATTGATATGC"
+fwd_primer_rc: "CTGCGTTCTTCATCGATGC"
+rev_primer_rc: "GCATATCAATAAGCGGAGGA"
+
+## Primer detection parameters
+# minimum overlap length for primer removal
+min_overlap: 10
+
+# maximum error rate for primer removal
+max_e: 0.2
+
+## CutAdapt parameters for quality trimming
+qf: 20
+qr: 20
+
+## minimum length of reads
+min_len: 50
+
+
+#*********************
+#***** QC report *****
+#*********************
+
+#For QC reports, we randomly choose samples to check their reads length distribution.
+#here we exclude controls and undetermined samples
+#Example "Water|DNA|Undetermined"
+
+excluded_samples: "Undetermined|Water|WATER|DNA|Neg|neg|NTC"
+
+#Number of random samples to look into their reads length distribution
+random_n: 5
+
+
+## Positive control samples to visualize for qc report, write down sample names with | delimiter in between
+#Example "Zymostandard_S266_L001|Zymostandard_S258_L001"
+
+#Positive_samples: ""
+Positive_samples: "Zymo-MCS_S9_L001"
+
+
+#***************
+#**** DADA2 ****
+#***************
+
+##Parameters 
+
+#Default is FALSE. If TRUE, multithreading is enabled and the number of available threads is automatically determined.
+#If an integer is provided, the number of threads to use is set
+threads: 20
+
+#Truncation length (Make sure your reads still overlap after truncation in order to merge them later!)
+#truncLen:
+#  - 260
+#  - 220
+
+
+#Maximum error rate (maximum number of “expected errors” allowed in a read)
+maxEE:
+  - 2
+  - 2
+
+#Truncate reads at the first instance of a quality score less than or equal to truncQ.
+truncQ: 2
+
+
+#Subsampling reads for learning error rates
+##check the logs/learnErrorRates..out file to check the quantity of bases, reads, and samples utilized for learning error rates.
+subsample: False  #True or False
+subsample2LearnErrorRate: 0.25
+
+
+#Default 1e8. The minimum number of total bases to use for error rate learning.
+learn_nbases: 100000000
+
+
+
+#If "consensus": The samples in a sequence table are independently checked for bimeras, and a consensus decision on each sequence variant is made.
+chimera_method: "consensus"
+
+
+#Initialize random number generator for reproducibility of taxonomy assignment
+seed: 100 
+
+
+
+#*****************
+#**** VSEARCH ****
+#*****************
+
+Identity: 0.993      # Minimum percent identity for a hit to be considered a match
+Maxaccepts: 30       # Maximum number of hits to consider per query
+
+
+
+
+#*********************
+#*** All databases ***
+#*********************
+
+## Taxonomy using RDP classifier
+RDP_dbs:
+ UNITE: "/bulk/sycuro_bulk/lsycuro_labshare/Sahar/IMC_ITS_pipeline/dada2_ITS_workflow/utils/databases/sh_general_release_dynamic_s_all_04.04.2024.fasta"
+
+## Taxonomy using vsearch
+vsearch_DBs: 
+ UNITE: "/bulk/sycuro_bulk/lsycuro_labshare/Sahar/IMC_ITS_pipeline/dada2_ITS_workflow/utils/databases/sh_general_release_dynamic_s_all_04.04.2024.fasta"
+
