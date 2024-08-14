@@ -37,15 +37,15 @@ Output:
 
 ## Steps:
 
-1-	**Cutadapt**: primer removal and quality trimming of the reads.
+1-**Cutadapt**: primer removal and quality trimming of the reads.
 <br>
 <br> 
 
-2-	**DADA2**: filtering and trimming reads for quality, dereplicating for reducing computational complexity, estimating error rate to distinguish true biological variants, sample inference identifying true sequences and fixing errors, merging paired-end reads, removing chimera and finally assigning taxonomy (using naive Bayesian classifier method with a 100% nucleotide identity match between the reference sequences and the query) and constructing a phylogenetic tree.
+2-**DADA2**: filtering and trimming reads for quality, dereplicating for reducing computational complexity, estimating error rate to distinguish true biological variants, sample inference identifying true sequences and fixing errors, merging paired-end reads, removing chimera and finally assigning taxonomy (using naive Bayesian classifier method with a 100% nucleotide identity match between the reference sequences and the query) and constructing a phylogenetic tree.
 <br> 
 <br> 
 
-3-      **VSEARCH**: assigning taxonomy by performing optimal global sequence alignments for the query against potential target sequences with an adjustable identity threshold (pipeline default: 99.3%).
+3-**VSEARCH**: assigning taxonomy by performing optimal global sequence alignments for the query against potential target sequences with an adjustable identity threshold (pipeline default: 99.3%).
 <br>   
 <br>
 
@@ -221,6 +221,9 @@ conda deactivate
 <br>
 
 <details>
+
+
+<details>
 <summary><h3 style="font-size: 24px;">3. Usage</h3></summary> 
 
 Then please follow these steps to set up and run the pipeline.
@@ -333,4 +336,5 @@ A copy of all snakemake files and logs will be copied to the output directory (o
 
 ##### 4.2.5 output/QC_html_report
    - qc_report.html
+
 </details>
