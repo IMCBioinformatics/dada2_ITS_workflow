@@ -1,0 +1,912 @@
+---
+title: "From ITS Amplicon Raw Data to ASVs (Amplicon Sequence Variants)"
+author: "IMC Bioinformatics"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+params:
+   rmd: "qc_report.Rmd"
+output:
+html_document:
+    theme: flatly
+    highlight: tango
+    toc: yes
+    number_sections: yes
+    toc_depth: 4
+    toc_float:
+      collapsed: no
+    smooth_scroll: yes
+---
+
+<br>
+<br>
+
+```{r needed packages,echo=F,include=F}
+
+suppressMessages(library(DT))
+suppressMessages(library(dplyr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(psadd))
+suppressMessages(library(phyloseq))
+suppressMessages(library(dada2))
+suppressMessages(library(RColorBrewer))
+suppressMessages(library(limma))
+suppressMessages(library(tidyverse))
+suppressMessages(library(reshape2))
+suppressMessages(library(kableExtra))
+suppressMessages(library(waterfalls))
+suppressMessages(library(ggpubr))
+suppressMessages(library(plotly))
+suppressMessages(library(htmlwidgets))
+
+```
+
+# **Investigating reads**
+
+<br>
+
+## Overall read quality plots {.tabset .tabset-fade}
+
+<br>
+
+The overall read quality plots offer a comprehensive assessment of the sequencing run's data integrity, highlighting raw and processed read quality. The plots display quality scores (Y-axis) against read positions (X-axis), showing a
+typical trend where quality decreases towards the end of the reads. The left panel represents forward reads quality and The right panel illustrates reverse reads quality aggregated for all samples. In gray-scale is a heat map of the frequency of each quality
+score at each base position is shown. The mean quality score at each position is shown by the green line, and the quartiles of the quality score distribution by the orange lines. The red line shows the scaled proportion of reads that extend to at least that
+position (this is more useful for other sequencing technologies, as Illumina reads are typically all the same length, hence a flat red line will be expected).
+
+<br>
+
+### Read quality raw 
+
+<br>
+
+```{r,results='asis', echo=F}
+
+files <- list.files(path = snakemake@params[["quality"]], pattern = "raw", full.names = TRUE)
+
+for (f in files) {
+  cat(paste0("![](", f, "){width=50%}"))
+ }
+
+```
+
+<br>
+<br>
+<br>
+<br>
+<br>
+
+
+### Read Quality after read quality trimming
+
+<br>
+
+```{r, results='asis',echo=F}
+
+files <- list.files(path = snakemake@params[["quality"]], pattern = "afterQC", full.names =TRUE)
+
+for (f in files) {
+  cat(paste0("![](", f, "){width=50%}"))
+ }
+```
+
+<br>
+<br>
+<br>
+<br>
+<br>
+
+### Read Quality after read error rate filtering
+
+<br>
+
+```{r, results='asis', echo=F}
+
+files <- list.files(path = snakemake@params[["quality"]], pattern = "afterdada2", full.names =TRUE)
+
+for (f in files) {
+  cat(paste0("![](", f, "){width=50%}"))
+ }
+
+```
+
+<br>
+<br>
+<br>
+<br>
+<br>
+
+## Read length distribution for all samples in the run {.tabset .tabset-fade}
+
+<br>
+
+Read length distribution is shown in this plot for all reads in all samples after each step. This shows how removing primer (if applicable), quality trimming, and error rate filtering affects the length 
+of reads during the process. The Y-axis represents the abundance of reads stacked per sample, while the X-axis shows the read lengths in base pairs (bp). Please note that the plot is initially zoomed in on the last 50 base pairs of the read length. To view the full distribution of read lengths, especially if they have become shorter, you will need to zoom out.
+
+<br>
+
+**You can use the range slider at the bottom of plot to zoom in or zoom out, hover over bars to know more about the reads length and count. Samples listed on the right panel can be excluded and included by clicking on them. Reads with counts less than 200 are removed for improving the visualization.**
+
+<br>
+<br>
+
+```{r plotly, echo=F,fig.width=10,fig.height=5}
+
+in_dir<-paste0(snakemake@config[['output_dir']],"/seqkit_samples")
+
+
+
+forward_read_suffix <- snakemake@config[['forward_read_suffix']]
+reverse_read_suffix <- snakemake@config[['reverse_read_suffix']]
+primer_removal <- snakemake@config[['primer_removal']]
+
+
+# Convert the value to logical if necessary
+if (is.character(primer_removal)) {
+  if (tolower(primer_removal) == "true") {
+    primer_removal <- TRUE
+  } else if (tolower(primer_removal) == "false") {
+    primer_removal <- FALSE
+  }
+}
+
+
+
+##reading files in and save them as objects
+object_names <- list.files(in_dir, pattern = paste0(forward_read_suffix,"|",reverse_read_suffix),full.names = T)
+
+
+for (i in 1:length(object_names)) {
+  # Read in the object
+  my_data <- read.table(object_names[i],header = F)
+  # Save the updated object
+  assign(x=gsub(".txt","",basename(object_names[i])),value = my_data)
+  
+}
+
+
+## fixing raw files
+raw_objects <- ls(pattern = "raw")
+
+for (i in raw_objects){
+  # Read in the object
+  my_data <- get(i)
+  if (nrow(my_data) == 1){ #this for times that primers are already removed from raw reads and they are not the same length anymore
+    my_data <- data.frame(
+      V1 = seq_along(1:my_data$V1),
+      V2 = c(rep(x = 0, times = my_data$V1-1), rep(my_data$V2, times = 1))) # Add missing closing parentheses
+    #Save the updated object
+    assign(i, value = my_data)
+  }
+}
+
+
+
+object_names <- ls(pattern = paste0(forward_read_suffix,"|",reverse_read_suffix))
+
+
+#### Loop over each file and change the column names and save them as a new object each
+for (i in object_names) {
+  # Read in the object
+  my_data <- get(i)
+  
+  # Print the current column names
+  #print(colnames(my_data))
+  
+  # Change the column names
+  colnames(my_data) <- c("read_length", "num_reads")
+  
+  # Print the new column names
+  #print(colnames(my_data))
+  
+  # Save the updated object
+  assign(i,value = my_data)
+}
+
+
+
+#add two columns of readtype and filetype to all object files based on a name
+
+# Conditional logic
+if (primer_removal == TRUE) {
+  names <- c("raw", "dada2", "primerRMV", "cutadapt")
+} else {
+  names <- c("raw", "dada2", "cutadapt")
+}
+
+
+# loop over the selected objects and add columns to them
+for (i in names){
+  objs <- ls(pattern = i)
+  for (j in objs){
+    x <- get(j)
+    x <- cbind(x, filetype = i)
+    colnames(x)
+    assign(j, x)
+  }
+}
+
+
+reads <- c(forward_read_suffix,reverse_read_suffix)
+
+
+# loop over the selected objects and add columns to them
+for (i in reads){
+  objs <- ls(pattern = i)
+  for (j in objs){
+    x <- get(j)
+    x <- cbind(x, readtype = i)
+    colnames(x)
+    assign(j, x)
+  }
+}
+
+
+
+names<-unique(sapply(strsplit(object_names,split=paste0(forward_read_suffix,"|",reverse_read_suffix)),`[`,1))
+
+# Loop through the list of object names and combine them using rbind
+for (i in names){
+  obj_list=ls(pattern = i)
+  combined_data <- data.frame() # Create an empty data frame to store the combined data
+  for (j in obj_list) {
+    obj <- get(j)
+    if (is.data.frame(obj)) {
+      combined_data <- rbind(combined_data, obj)
+      assign(x = paste0("combined_",i), combined_data)
+    }
+  }
+}
+
+
+rm(combined_data)
+
+# Loop through each file and make column filetype a factor and add a column as sample_name
+for (file in ls(pattern = "combined_")) {
+  # Read in the file
+  data <- get(file)
+  
+  if (primer_removal == TRUE) {
+    # Convert the desired column to a factor
+    data$filetype <- factor(data$filetype,levels = c("raw","primerRMV","cutadapt","dada2"))
+  } else {
+    # Convert the desired column to a factor
+    data$filetype <- factor(data$filetype,levels = c("raw","cutadapt","dada2"))
+  }
+  
+  # Add a new column
+  name <- strsplit2(file,split = "combined_")[2]
+  data$sample_name <- name
+  
+  # Save the modified file back to disk
+  assign(value = data, x = file)
+}
+
+
+
+final_data <- data.frame() # Create an empty data frame to store the combined data
+
+
+files=ls(pattern = "combined_")
+
+# Loop through the list of combined sample object names and combine them using rbind
+for (i in files){
+  obj <- get(i)
+  if (is.data.frame(obj)) {
+    final_data <- rbind(final_data, obj)
+  }
+}
+
+
+final_data <- final_data %>%
+  mutate(readtype = gsub(forward_read_suffix, "R1", readtype),
+         readtype = gsub(reverse_read_suffix, "R2", readtype),
+         filetype = gsub("raw","Raw reads",filetype),
+         filetype = gsub("primerRMV","After Primer Removal",filetype),
+         filetype = gsub("cutadapt","After Quality Trimming",filetype),
+         filetype = gsub("dada2","After DADA2",filetype))
+
+
+
+final_data$filetype <- factor(final_data$filetype,levels = c("Raw reads","After Primer Removal","After Quality Trimming","After DADA2"))
+
+###Forward
+
+p <- ggplot(final_data %>% filter(num_reads > 0 & readtype=="R1"), aes(x = read_length, y = num_reads, fill = sample_name)) +
+  geom_col(width = 1) +
+  theme_bw() +
+  labs(title = "All the forward reads in all samples length distribution") +
+  xlab(NULL) +
+  ylab(NULL) +
+  xlim(0,max(final_data$read_length)+15) +
+  theme(legend.position = "right",
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+
+
+
+if (primer_removal == TRUE) {
+  # Convert to plotly and enable zooming
+  plotly_p <- p +
+    facet_wrap(~filetype, ncol = 4)
+  plotly_p <- plotly_p %>% plotly::ggplotly() %>%  
+    layout(xaxis = list(rangeslider = list(visible = TRUE), rangemode = "normal"),
+           xaxis2 = list(rangeslider = list(visible = TRUE), rangemode = "normal"),
+           xaxis3 = list(rangeslider = list(visible = TRUE), rangemode = "normal"),
+           xaxis4 = list(rangeslider = list(visible = TRUE), rangemode = "normal"),
+           yaxis = list(fixedrange = FALSE))
+  } else {
+  # Convert to plotly and enable zooming
+  plotly_p <- p +
+    facet_wrap(~filetype, ncol = 3) 
+  plotly_p <- plotly_p %>% plotly::ggplotly() %>%
+    layout(xaxis = list(rangeslider = list(visible = TRUE), rangemode = "normal"),
+           xaxis2 = list(rangeslider = list(visible = TRUE), rangemode = "normal"),
+           xaxis3 = list(rangeslider = list(visible = TRUE), rangemode = "normal"),
+           yaxis = list(fixedrange = FALSE))
+  }
+
+
+default_x_range <- c( max(final_data$read_length)-80,  max(final_data$read_length)+30)  # Adjust these values to your desired default zoom range for the x-axis
+
+plotly_p <- plotly_p %>% plotly::ggplotly() %>%
+  layout(
+    xaxis = list(
+      rangeslider = list(visible = TRUE),
+      rangemode = "normal",
+      range = default_x_range  # Set the default zoom range
+    ),
+    xaxis2 = list(
+      rangeslider = list(visible = TRUE),
+      rangemode = "normal",
+      range = default_x_range
+    ),
+    xaxis3 = list(
+      rangeslider = list(visible = TRUE),
+      rangemode = "normal",
+      range = default_x_range
+    ),
+    xaxis4 = list(
+      rangeslider = list(visible = TRUE),
+      rangemode = "normal",
+      range = default_x_range
+    ),
+    yaxis = list(fixedrange = FALSE)
+  )
+
+
+plotly_p
+
+
+###Reverse
+
+p <- ggplot(final_data %>% filter(num_reads > 0 & readtype=="R2"), aes(x = read_length, y = num_reads, fill = sample_name)) +
+  geom_col(width = 1) +
+  theme_bw() +
+  labs(title = "All the reverse reads in all samples length distribution") +
+  xlab(NULL) +
+  ylab(NULL) +
+  xlim(0,max(final_data$read_length)+15) +
+  theme(legend.position = "right",
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+
+
+if (primer_removal == TRUE) {
+  # Convert to plotly and enable zooming
+  plotly_p <- p +
+    facet_wrap(~filetype, ncol = 4)
+  plotly_p <- plotly_p %>% plotly::ggplotly() %>%
+    layout(xaxis = list(rangeslider = list(visible = TRUE), rangemode = "normal"),
+           xaxis2 = list(rangeslider = list(visible = TRUE), rangemode = "normal"),
+           xaxis3 = list(rangeslider = list(visible = TRUE), rangemode = "normal"),
+           xaxis4 = list(rangeslider = list(visible = TRUE), rangemode = "normal"),
+           yaxis = list(fixedrange = FALSE))
+  } else {
+  # Convert to plotly and enable zooming
+  plotly_p <- p +
+    facet_wrap(~filetype, ncol = 3)
+  plotly_p <- plotly_p %>% plotly::ggplotly() %>%
+    layout(xaxis = list(rangeslider = list(visible = TRUE), rangemode = "normal"),
+           xaxis2 = list(rangeslider = list(visible = TRUE), rangemode = "normal"),
+           xaxis3 = list(rangeslider = list(visible = TRUE), rangemode = "normal"),
+           yaxis = list(fixedrange = FALSE))
+  }
+
+
+default_x_range <- c( max(final_data$read_length)-80,  max(final_data$read_length)+30)  # Adjust these values to your desired default zoom range for the x-axis
+
+plotly_p <- plotly_p %>% plotly::ggplotly() %>%
+  layout(
+    xaxis = list(
+      rangeslider = list(visible = TRUE),
+      rangemode = "normal",
+      range = default_x_range  # Set the default zoom range
+    ),
+    xaxis2 = list(
+      rangeslider = list(visible = TRUE),
+      rangemode = "normal",
+      range = default_x_range
+    ),
+    xaxis3 = list(
+      rangeslider = list(visible = TRUE),
+      rangemode = "normal",
+      range = default_x_range
+    ),
+    xaxis4 = list(
+      rangeslider = list(visible = TRUE),
+      rangemode = "normal",
+      range = default_x_range
+    ),
+    yaxis = list(fixedrange = FALSE)
+  )
+
+
+
+plotly_p
+
+```
+
+<br>
+<br>
+<br>
+<br>
+<br>
+
+
+```{r,echo=F,messages=FALSE, warning=FALSE}
+
+reads<-read.csv(snakemake@params[["Nread"]],sep="\t")
+
+```
+
+## Reads count change throughout the dada2 pipeline in all samples
+
+<br>
+
+This plot provides a step-by-step overview of the changes in read counts throughout the DADA2 pipeline for all samples. It illustrates how many sequencing reads are discarded at each stage of the processing workflow, from the initial raw data to the
+final remained cleaned data. Each step, including quality trimming, filtering, denoising, merging, and chimera removal, is shown with the corresponding number of reads lost. The final bar indicates the total number of high-quality reads remaining after all
+processing steps.
+
+<br>
+
+```{r table merge,echo=F,messages=FALSE, warning=FALSE,include=T,fig.width=11,fig.height=7}
+reads1<-reads
+
+colnames(reads1)[1:7]<-c("Sample", "Raw", "not-Quality_Trimmed", "not-Filtered", "Denoised", "Merged","Cleaned")
+
+reads1 <- reads1 %>% mutate_all(~ifelse(is.na(.), 0, .))
+
+read_loss<-data.frame(step=names(colSums(reads1[,-c(1, 8)])),count=colSums(reads1[,-c(1, 8)]))
+
+read_loss$step<- c("Raw", "Quality_Trimmed", "Filtered", "not-Denoised", "not-Merged","Chimeric")
+
+# Create a color palette for the bars (you can customize these colors)
+colors <- c("Raw" = "#f5f0e1", "Quality_Trimmed" = "#ff6e40",
+            "Filtered" = "#ff6e40", "not-Denoised" = "#ff6e40",
+            "not-Merged" = "#ff6e40","Chimeric" = "#ff6e40")
+
+
+
+# Create a new data frame with the "step" and "loss" columns
+new_data <- data.frame(
+  step = read_loss$step,
+  loss = c(read_loss$count[1],
+           diff(read_loss$count)[1:5])) %>%
+mutate(label = paste(step, "\n(n=", loss, ")"))
+
+waterfall(new_data, calc_total = TRUE,
+          fill_by_sign = F,
+          rect_text_size = 1.5,
+          fill_colours = colors,
+          total_rect_color = "#ffc13b",
+          total_rect_text_color = "black")+
+  theme_bw()+xlab("Read Counts")+ylab("Processing steps")+ggtitle("Read count change in each step")+
+  theme(axis.text.x = element_text(angle = 45, size = 14, colour = "black",  hjust = 1, face= "bold"), 
+        axis.title.y = element_text(size = 14, face = "bold"), 
+        legend.title = element_text(size = 16, face = "bold"),
+        axis.title.x = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 14, face = "bold", colour = "black"),
+        legend.position = "bottom",
+        axis.text.y = element_text(colour = "black", size = 14, face = "bold"),
+        plot.title = element_text(size=14,face="bold"),
+        plot.caption = element_text(hjust = 0,vjust=0.5,size = 12, face= "bold", colour = "red"),
+        panel.background = element_blank(),
+        panel.border =element_rect(fill = NA, color = "black"), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"))
+  
+
+
+htmltools::HTML("<br>")
+htmltools::HTML("<br>")
+
+
+reads1[,8]<-data.frame(reads1$Cleaned/reads1$Raw)*100
+colnames(reads1)[8]<-"Clean_Reads_Percent"
+reads1[,8]<-round(reads1[,8],digits = 2)
+
+
+
+datatable(reads1, 
+          rownames= FALSE,
+          filter = 'top',
+          extensions = 'Buttons',
+          options = list(scrollX = TRUE,
+                         pageLength = 5,
+                         dom = 'Blfrtip',
+                         buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+                         rownames = F),
+                         caption = htmltools::tags$caption(style = 'caption-side: bottom; text-align: left;',
+                         htmltools::em('Tracking Read Counts Across the DADA2 Pipeline:'), htmltools::br(), 
+                         htmltools::em('Raw: Initial number of reads in each sample.'), htmltools::br(),
+                         htmltools::em('not-Quality_Trimmed: Reads left after primer removal (if applicable) and quality trimming prior to DADA2 processing.'), htmltools::br(),
+                         htmltools::em('not-Filtered: Reads left after eliminating sequences with ambiguous bases, high error rates, and short length.'), htmltools::br(),
+                         htmltools::em('Denoised: Reads left with high quality and error-corrected sequences.'), htmltools::br(),
+                         htmltools::em('Merged: Reads left after removal of singletons and unmerged forward and reverse read pairs.'), htmltools::br(),
+                         htmltools::em('Cleaned: Reads left after eliminating chimeric sequences,artifact sequences created during PCR due to partially extended strands binding to similar but different sequences.'), htmltools::br(),
+                         htmltools::em('If there is a sample called undetermined, it contains the reads that could not be assigned to any samples.')))
+
+
+```
+
+
+<br>
+<br>
+<br>
+<br>
+<br>
+
+## Distribution of initial and final read counts
+
+<br>
+
+This plot compares the distribution of read counts at the beginning and end of the data processing pipeline for all samples. The left panel shows the initial distribution of raw reads and the right panel illustrates the final distribution of clean reads
+after all the steps of trimming, filtering, denoising, merging, and chimera removal have been applied. Each bar represents the number of samples falling within specific read count ranges.
+
+<br>
+
+```{r boxplot,echo=F,messages=FALSE, warning=FALSE,results = FALSE,fig.width=11,fig.height=7}
+
+reads2<-data.frame(rep("Starting number of reads",times=nrow(reads1)),reads1$Raw)
+colnames(reads2)<-c("Var","value")
+
+
+reads3<-data.frame(rep("Finishing number of reads",times=nrow(reads1)),reads1$Cleaned)
+colnames(reads3)<-c("Var","value")
+
+
+n=max(reads2$value)/10
+
+# Determine max bin count
+max_count <- max(hist(reads2$value, breaks=seq(0, max(reads2$value), by=n), plot=FALSE)$counts)
+
+A<-ggplot(reads2, aes(x=value)) + 
+  geom_histogram(color="black", fill="#E69F00",binwidth = n,boundary=0)+ #boundary start starts the bin from zero
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 45, size = 12, colour = "black",  hjust = 1, face= "bold"),
+        axis.title.y = element_text(size = 12, face = "bold"), legend.title = element_text(size = 16, face = "bold"),
+        axis.title.x = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 12, face = "bold", colour = "black"),
+        axis.text.y = element_text(colour = "black", size = 12, face = "bold"),
+        plot.title = element_text(size=14,face="bold"),
+        plot.caption = element_text(hjust = 0,vjust=1.5,size = 12, face = "bold", colour = "red"),
+        legend.position = "None")+xlab("Raw reads (count)")+ylab("Sample count")+
+  ggtitle("Starting number of reads distribution")+
+  theme(panel.background = element_blank(),
+        panel.border =element_rect(fill = NA, color = "black"), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"))+
+  # update: adds counts above bars
+  stat_bin(binwidth = n,boundary = 0, aes(label=ifelse(..count.. > 0, ..count.., "")),geom="text",vjust=-0.9,hjust=0.5)+ 
+coord_cartesian(ylim=c(0, max_count + 30))#+labs(caption="Binwidth is 5.")
+
+
+
+n=max(reads3$value)/10
+
+# Determine max bin count
+max_count <- max(hist(reads3$value, breaks=seq(0, max(reads3$value), by=n), plot=FALSE)$counts)
+
+B<-ggplot(reads3, aes(x=value)) +
+  geom_histogram(color="black", fill="#E69F00",binwidth = n,boundary=0)+ #boundary start starts the bin from zero
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 45, size = 12, colour = "black",  hjust = 1, face= "bold"),
+        axis.title.y = element_text(size = 12, face = "bold"), legend.title = element_text(size = 16, face = "bold"),
+        axis.title.x = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 12, face = "bold", colour = "black"),
+        axis.text.y = element_text(colour = "black", size = 12, face = "bold"),
+        plot.title = element_text(size=14,face="bold"),
+        plot.caption = element_text(hjust = 0,vjust=1.5,size = 12, face = "bold", colour = "red"),
+        legend.position = "None")+xlab("Clean reads (count)")+ylab("Sample count")+
+  ggtitle("Final number of clean reads distribution")+
+  theme(panel.background = element_blank(),
+        panel.border =element_rect(fill = NA, color = "black"), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour ="black"))+
+  # update: adds counts above bars
+  stat_bin(binwidth = n,boundary = 0, aes(label=ifelse(..count.. > 0, ..count.., "")),geom="text",vjust=-0.9,hjust=0.5)+ 
+coord_cartesian(ylim=c(0, max_count + 30))#+labs(caption="Binwidth is 5.")
+
+
+ggarrange(A,B)
+
+```
+
+
+<br>
+<br>
+<br>
+<br>
+<br>
+
+# **Investigating ASVs**
+
+<br>
+
+## Fungal composition in the positive controls
+
+<br>
+
+The original composition of the Zymo control includes a balanced mix of 10 bacterial species and 2 yeast species. When amplifying the ITS region, the expected outcome is that only the yeast species, Saccharomyces cerevisiae and Cryptococcus neoformans, should be amplified.
+
+<br>
+
+```{r positive control, warning=F, message=F, results='asis',echo=F,fig.width=10, fig.height=7}
+
+#Read sequence data and taxonomy data
+seqtab <- data.frame(read.csv(file = snakemake@params[["seqtab"]],row.names = 1))
+taxa <- read.table(snakemake@params[["taxonomy"]], header = TRUE, sep = "\t", check.names = FALSE)
+
+# Prepare the sample data
+data <- data.frame(samples = rownames(seqtab))
+rownames(data) <- data$samples
+
+
+# Create a phyloseq object
+ps <- phyloseq(otu_table(as.matrix(seqtab), taxa_are_rows = FALSE),
+               sample_data(data),
+               tax_table(as.matrix(taxa)))
+
+
+
+# Prepare color palette
+n <- 74
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+
+
+# List of positive control samples
+samples <- unlist(base::strsplit(snakemake@params[["pos"]], split = "\\|"))
+
+
+if (length(samples) > 0 && !all(samples == "")) {
+  
+  # Define known Fungal community counts for each reference file
+  ref_files <- list.files(snakemake@params[["ref"]])
+  names(ref_files)<-stringr::str_split_fixed(ref_files, "\\.", 2)[, 1]
+  
+  #read in community composition of reference files in alphabetic order
+  source(snakemake@params[["source"]])
+  
+  
+  for (i in samples) {
+    mock <- prune_samples(ps@sam_data$samples == i, ps)
+    mock <- prune_taxa(colSums(mock@otu_table) > 0, mock)
+    
+    # Iterate over each reference file
+    for (j in names(ref_files)) {
+      mock.ref <- getSequences(paste0(snakemake@params[["ref"]],ref_files[[j]]))
+      unqs.mock <- mock@otu_table@.Data
+      
+      # Retrieve the expected Fungal community counts for the current reference file
+      expected_percentage <- community_percentage[[j]]
+      
+      match.ref <- as.data.frame(sapply(colnames(unqs.mock), function(x) grepl(x, mock.ref)))
+      
+      match.ref$species <- stringr::str_split_fixed(names(mock.ref), "_18S|_Mitochondria|_mitochondria|_ITS", 2)[, 1]
+      
+      maps <- gather(data = match.ref, key = "seqs", value = "present", -species) %>%
+        dplyr::filter(present == TRUE)
+
+        #sometimes there is overlap between positive control reference files Fungal composition so samples get matched with a reference when there is >60% similar Fungal composition
+
+        if(nrow(maps)>0 && mean(unique(match.ref$species) %in% unique(maps$species))*100 > 60){
+        maps$abundance <- c(mock@otu_table[, maps$seqs])
+        
+        tot_abund<-maps %>% summarise(abundance=sum(abundance))
+        
+        temp=maps %>% dplyr::group_by(species) %>% dplyr::summarise("Observed"=round(100*(sum(abundance)/unlist(tot_abund)),digits = 1))
+        colnames(temp)[1]<-"Taxa"
+        
+        temp<-left_join(expected_percentage,temp,by="Taxa") %>%
+        mutate(Observed = replace_na(Observed, 0))
+
+
+        original<-data.frame(Taxa = c("Pseudomonas_aeruginosa", "Escherichia_coli",
+                             "Salmonella_enterica", "Lactobacillus_fermentum",
+                             "Enterococcus_faecalis", "Staphylococcus_aureus",
+                             "Listeria_monocytogenes", "Bacillus_subtilis",
+                             "Saccharomyces_cerevisiae","Cryptococcus_neoformans"),
+                    Original = c(12,12,12,12,12,12,12,12,2,2))
+
+        temp<-left_join(original,temp,by="Taxa") %>%
+        mutate(Expected = replace_na(Expected, 0)) %>%
+        mutate(Observed = replace_na(Observed, 0))
+               
+        # Plotting
+        A <- ggplot(reshape2::melt(as.data.frame(temp)), aes(x = variable, y = value, fill = Taxa)) +
+          geom_bar(colour = "black", position = "stack", stat = "identity", width = 0.8) +
+          xlab(NULL) +
+          ggtitle(paste0("Fungal profile in ", i)) +
+          theme(legend.position = "right",
+                axis.text.x = element_text(angle = 90, size = 15, colour = "black", vjust = 0.9, hjust = 0.83, face = "bold"),
+                axis.title.y = element_text(size = 15, face = "bold"),
+                axis.title.x = element_text(size = 15, face = "bold"),
+                legend.title = element_text(size = 12, face = "bold"),
+                legend.text = element_text(size = 12, face = "bold", colour = "black"),
+                axis.text.y = element_text(colour = "black", size = 13, face = "bold"),
+                plot.caption = element_text(hjust = 0, vjust = 0, size = 17, face = "bold", colour = "red"),
+                plot.title = element_text(size = 15, face = "bold"),
+                strip.text.x = element_text(size = 15, colour = "black")) +
+          ylab("Counts") +
+          scale_fill_manual(values = col_vector) +
+          theme(panel.background = element_blank(),
+                panel.border = element_rect(fill = NA, color = "black"),
+                panel.grid.major = element_blank(),
+                panel.grid.minor = element_blank(),
+                axis.line = element_line(colour = "black"))+guides(fill=guide_legend(nrow=21,byrow=F))
+        print(A)
+        
+        cat("<br><br>")
+
+        B <- kable(temp, format = "html", caption = "Percentage table of taxa found in the positive control sample") %>%
+          kable_styling() %>%
+          column_spec(1:ncol(temp), width = "6cm")
+        print(B)
+        
+        cat("<br><br>")
+        cat("<br><br>")
+        cat("<br><br>")
+        cat("<br><br>")
+        
+      }
+    }
+  }
+  
+} else {
+  cat("There was no positive control in this run")
+  cat("<br><br>")
+  cat("<br><br>")
+  cat("<br><br>")
+  cat("<br><br>")
+  
+}
+
+
+```
+
+
+
+## ASVs prevalence and Abudnance
+
+<br>
+This graph depicts the prevalence and abundance of Amplicon Sequence Variants (ASVs) across multiple samples. The X-axis represents the abundance of each ASV, which is the total count of sequences assigned to that ASV. The Y-axis represents the prevalence of
+each ASV, indicating the number of samples in which the ASV is found. Each point on the graph represents a single ASV, with its position determined by its abundance and prevalence. Points higher on the Y-axis are found in more samples, indicating higher
+prevalence, while points further to the right on the X-axis have higher sequence counts, indicating higher abundance.
+
+<br>
+
+```{r, investigating ASVs,echo=F,messages=FALSE, warning=FALSE,include=T}
+
+
+seqtab <- data.frame(read.csv(file = snakemake@params[["seqtab"]],row.names = 1))
+
+# Calculate prevalence for each taxa
+Prevalence <- seqtab %>%
+  summarise_all(~sum(. > 0)) %>%    # Prevalence: Count of non-zero entries for each taxa
+  t() %>%
+  as.data.frame() %>%
+  mutate(Taxa = rownames(.))
+
+colnames(Prevalence) <- c("Prevalence", "Taxa")
+
+# Calculate abundance for each taxa
+Abundance <- seqtab %>% 
+  t() %>%
+  rowSums() %>%  
+  as.data.frame() 
+
+Abundance$Taxa <- rownames(Abundance)
+
+colnames(Abundance) <- c("Abundance", "Taxa")
+
+# Joining prevalence and abundance
+df <- left_join(Prevalence, Abundance, by = "Taxa")
+
+# Melting the data for boxplot visualization
+df1 <- reshape2::melt(df, id.vars = "Taxa", value.name = "count")
+
+# Scatter plot
+ggplot(df, aes(x = Abundance, y = Prevalence)) +
+  geom_point(aes(color = ifelse(Prevalence > 10 & Abundance > 150, "#77c593", "black"))) +
+  scale_color_identity() +
+  ggtitle("Overview of ASVs focusing on their prevalence and abundance")+
+  labs(caption = paste0("Points in green represent ASVs with prevalence > 10 and abundance > 150.\n",
+  "Total number of ASVs is ", length(df$Taxa), " in ", nrow(seqtab) ," samples."))+
+  theme(plot.caption = element_text(hjust = 0,size=12),
+        axis.text.x = element_text(angle = 45, size = 12, colour = "black",  hjust = 1, face= "bold"),
+        axis.title.y = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 16, face = "bold"),
+        axis.title.x = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 12, face = "bold", colour = "black"),
+        axis.text.y = element_text(colour = "black", size = 12, face = "bold"),
+        plot.title = element_text(size=14,face="bold"),
+        panel.background = element_blank(),
+        panel.border =element_rect(fill = NA, color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"))
+
+```
+
+
+<br>
+<br>
+<br>
+<br>
+<br>
+
+## ASVs length distribution for all samples
+
+<br>
+
+```{r all ASVs length distribution abundance, results='asis', echo=F}
+
+files <- list.files(path = snakemake@params[["length_distribution"]], pattern = "Sequence_Length_distribution", full.names =TRUE)
+
+
+for (f in files) {
+   cat(paste0("![](", f, "){width=1000%}\n"))
+ }
+
+```
+
+<br>
+<br>
+<br>
+<br>
+<br>
+
+
+
+## Taxonomy profile
+
+<br>
+
+
+If no sample profile is displayed, try selecting different samples from the list. To view specific sample profiles in the Krona plot, you need to click on the samples listed on the left. You can also use 
+the search box at the top to find specific taxa. Additionally, the Krona plot provides options to adjust the taxonomy depth, font size, and chart size to customize your view. Use the '+' and '-' buttons 
+next to each option to make these adjustments. If needed, you can also take a snapshot of your current view for reference or sharing.
+
+<br>
+
+
+```{r krona-plot, echo=FALSE,message=F, warning=F}
+
+options(browser = "echo") #plot_krona is set to open the krona plot as a separate html file, this stops it
+
+# Plot Krona chart
+a <- plot_krona(physeq=ps, output=snakemake@params[['krona']], variable="samples", trim = TRUE)
+
+file=paste0(snakemake@config[['path']],snakemake@config[['output_dir']])
+
+```
+
+<iframe src="`r paste0(file, "/QC_html_report/krona_Species_result.html")`" width="1100" height="700" scrolling="yes"></iframe>
+
+
+<div Class="tocify-extend-page" data-unique="tocify-extend-page" style="height: 0;"></div>

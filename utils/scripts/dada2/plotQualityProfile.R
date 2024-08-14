@@ -1,0 +1,81 @@
+suppressMessages(library(dada2))
+suppressMessages(library(ggplot2))
+suppressMessages(library(gridExtra))
+suppressMessages(library(ShortRead))
+
+Fs = snakemake@input[['R1']]
+Rs = snakemake@input[['R2']]
+
+
+exists <- file.exists(Fs) & file.exists(Rs)
+Fs <- Fs[exists]
+Rs <- Rs[exists]
+
+# Create a function to count reads in a FASTQ file
+count_reads <- function(file_path) {
+  reads <- readFastq(file_path)
+  return(length(reads))
+}
+
+
+# Iterate through the list of FASTQ files and count reads
+valid_Fs <- character(0)  # To store valid file paths
+
+for (file_path in Fs) {
+  read_count <- count_reads(file_path)
+  if (read_count > 0) {
+    valid_Fs <- c(valid_Fs, file_path)
+  } else {
+    print(paste("File:", file_path, "has zero reads and will be disregarded.\n"))
+  }
+}
+
+
+# Iterate through the list of FASTQ files and count reads
+valid_Rs <- character(0)  # To store valid file paths
+
+for (file_path in Rs) {
+  read_count <- count_reads(file_path)
+  if (read_count > 0) {
+    valid_Rs <- c(valid_Rs, file_path)
+  } else {
+    print(paste("File:", file_path, "has zero reads and will be disregarded.\n"))
+  }
+}
+
+
+p_F<- plotQualityProfile(valid_Fs,n=1e5,aggregate=T) + 
+  theme_classic(base_size = 10) +  # Increase base size for classic theme
+  theme(
+    axis.title = element_text(size = 14),  # Increase size of axis titles
+    axis.text = element_text(size = 12),   # Increase size of axis text
+    legend.title = element_text(size = 14),# Increase size of legend title
+    legend.text = element_text(size = 12), # Increase size of legend text
+    strip.text = element_text(size = 16)   # Increase size of strip text (facet labels)
+  )
+
+
+print("Out of plotQualityProfile R1")
+
+
+ggsave(snakemake@output$R1,p_F)
+
+
+p_R<- plotQualityProfile(valid_Rs,n=1e5,aggregate=T)+ 
+  theme_classic(base_size = 10) +  # Increase base size for classic theme
+  theme(
+    axis.title = element_text(size = 14),  # Increase size of axis titles
+    axis.text = element_text(size = 12),   # Increase size of axis text
+    legend.title = element_text(size = 14),# Increase size of legend title
+    legend.text = element_text(size = 12), # Increase size of legend text
+    strip.text = element_text(size = 16)   # Increase size of strip text (facet labels)
+  )
+
+
+print("Out of plotQualityProfile R2")
+
+ggsave(snakemake@output$R2,p_R)
+print("Out of saving Quality profiles")
+
+                   
+
