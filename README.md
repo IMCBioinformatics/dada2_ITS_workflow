@@ -220,7 +220,7 @@ conda deactivate
 
 <br>
 
-<details>
+</details>
 
 
 <details>
